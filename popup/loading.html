@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+  <style>
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      background: linear-gradient(to bottom, #f0f4f8, #d0e1f9);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+    }
+
+    .spinner {
+      width: 80px;
+      height: 80px;
+      border: 8px solid #ccc;
+      border-top: 8px solid #f44336;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .message {
+      font-size: 18px;
+      color: #333;
+      text-align: center;
+    }
+
+    .bike-icon {
+      font-size: 32px;
+      animation: bounce 1s infinite alternate;
+    }
+
+    @keyframes bounce {
+      to { transform: translateY(-6px); }
+    }
+  </style>
+</head>
+<body>
+  <div class="spinner"></div>
+  <div class="bike-icon">🚴‍♂️</div>
+  <div class="message">Warming up the peloton...</div>
+</body>
+</html>

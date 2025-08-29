@@ -1,0 +1,32 @@
+{
+  "manifest_version": 2,
+  "name": "Strava Follower Scanner",
+  "version": "1.0",
+  "description": "Scans Strava followers across paginated pages and flags suspicious profiles.",
+  "permissions": [
+    "tabs",
+    "activeTab",
+	"scripting",
+	"storage",
+    "https://www.strava.com/*"
+  ],
+	"background": {
+		"scripts": ["background.js"],
+		"persistent": true
+	
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.strava.com/*"],
+      "js": ["content.js"]
+    }
+  ],
+  "browser_action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": "icons/icon.png"
+  },
+"web_accessible_resources": [
+	"popup/popup.html",
+	"popup/loading.html"
+]
+}
