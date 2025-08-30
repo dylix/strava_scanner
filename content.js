@@ -170,6 +170,7 @@ function overlayCustomGiftButton() {
 				return;
 			}
 			if (iframe.style.display === "none" || iframe.style.display === "") {
+				iframeFollow.style.display = "none";
 				iframe.style.display = "block";
 				closeBtn.style.display = "block";
 				scrapeFollowers(); // Only run when showing the iframe
@@ -323,7 +324,7 @@ async function fetchProfileDetails(url) {
 			memberSince: null,
 			url: null,
 			profilePic: null,
-			isPremium: null
+			isPremium: false
 		};
 	}
 }
@@ -726,11 +727,11 @@ const profileHtml = `
     <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 8px;">
       <div class="cycling-avatar ${stats.isPremium ? 'premium' : 'standard'}" style="position: relative;">
         <img src="${stats.profilePic}" alt="Cyclist Avatar" style="width: 80px; height: 80px; border-radius: 50%;"/>
-        <div class="badge" style="position: absolute; bottom: -6px; right: -6px; font-size: 20px;">🚴‍♀️</div>
+        <!--<div class="badge" style="position: absolute; bottom: -6px; right: -6px; font-size: 20px;">🚴‍♀️</div>-->
       </div>
 
       <div style="flex-grow: 1;">
-        <a href="https://www.strava.com/athletes/${id}" target="_top">
+        <a href="https://www.strava.com/athletes/${id}" target="_blank">
           <button id="profileBtn" style="cursor: pointer; padding: 8px 16px; background: #d33; color: white; border: none; border-radius: 4px;">
             View Profile
           </button>
@@ -807,6 +808,7 @@ const profileHtml = `
 
 function openAllNewFollowerProfiles() {
 	if (iframeFollow.style.display === "none" || iframeFollow.style.display === "") {
+		iframe.style.display = "none";
 		iframeFollow.style.display = "block";
 		closeBtn.style.display = "block";
 	} else {
@@ -915,6 +917,7 @@ closeBtn.addEventListener("click", () => {
 });
 
 if (shouldRunOnFollowersPage()) {
+	iframeFollow.style.display = "none";
 	iframe.style.display = "block";
 	closeBtn.style.display = "block";
 	scrapeFollowers();
