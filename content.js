@@ -722,12 +722,13 @@ async function renderFollowerPageInIframe(urls) {
 
 const profileHtml = `
   <div class="athlete" style="margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #ccc;">
-    <h2 style="margin: 4px 0;">Name: ${stats.name}</h2>
+    <h2 style="margin: 4px 0; color: ${isSuspicious ? '#d00' : 'inherit'};">
+      Name: ${stats.name} ${isSuspicious ? '<span style="font-size: 20px;">🚨🚴</span>' : ''}
+    </h2>
 
     <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 8px;">
       <div class="cycling-avatar ${stats.isPremium ? 'premium' : 'standard'}" style="position: relative;">
         <img src="${stats.profilePic}" alt="Cyclist Avatar" style="width: 80px; height: 80px; border-radius: 50%;"/>
-        <!--<div class="badge" style="position: absolute; bottom: -6px; right: -6px; font-size: 20px;">🚴‍♀️</div>-->
       </div>
 
       <div style="flex-grow: 1;">
@@ -736,7 +737,7 @@ const profileHtml = `
             View Profile
           </button>
         </a>
-		<p class="${statusClass}" style="margin: 0 0 6px;">${statusLabel}</p>
+        <p class="${statusClass}" style="margin: 0 0 6px;">${statusLabel}</p>
       </div>
     </div>
 
@@ -754,6 +755,7 @@ const profileHtml = `
     ` : ""}
   </div>
 `;
+
 
 
 
