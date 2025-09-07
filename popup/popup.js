@@ -47,23 +47,35 @@ document.getElementById("scrape-btn").addEventListener("click", () => {
 			});
 		}
 	});
+	document.getElementById("status").textContent = "Finished..";
 });
 
 document.getElementById("clear-cache-btn").addEventListener("click", () => {
 	document.getElementById("status").textContent = "Clearing cache...";
 	browser.runtime.sendMessage({ action: "CLEAN_CACHE" });
+	window.close(); // Optional: close popup
 });
 
 const port = browser.runtime.connect({ name: "popup" });
 
 function renderProfiles(profiles) {
-	const container = document.getElementById("profile-list");
-	if (!container) return;
-	container.innerHTML = ""; // Clear old content
-	profiles.forEach(({ profile, reason }) => {
-		container.appendChild(renderProfileLine(profile, reason));
-	});
+    const container = document.getElementById("profile-list");
+    if (!container) return;
+
+    container.innerHTML = ""; // Clear old content
+
+    // Create and insert header with count
+    const header = document.createElement("div");
+    header.className = "profile-header";
+    header.textContent = `Profiles Found: ${profiles.length}`;
+    container.appendChild(header);
+
+    // Append each profile line
+    profiles.forEach(({ profile, reason }) => {
+        container.appendChild(renderProfileLine(profile, reason));
+    });
 }
+
 
 function renderProfileLine(profile, reason) {
 	const readableDate = new Date(profile.memberSince).toLocaleDateString("en-US", {
@@ -102,4 +114,11 @@ window.addEventListener("message", (event) => {
 		// Update the UI with the new cache
 		renderProfiles(profileCache);
 	}
+});
+
+window.addEventListener("message", (event) => {
+  if (event.data?.type === "TO_POPUP") {
+    const msg = event.data.payload.message;
+    document.getElementById("status").textContent = msg;
+  }
 });

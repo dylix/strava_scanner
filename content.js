@@ -89,6 +89,7 @@ async function getAllAthleteIds() {
 	while (true) {
 		const url = `https://www.strava.com/athletes/${athleteId}/follows?page=${page}&page_uses_modern_javascript=true&type=followers`;
 		showBadge(`📖 Fetching athletes from page: ${page}`);
+		sendToPopup("FROM_CONTENT", { message: `📖 Fetching athletes from page: ${page}` });
 		const res = await fetch(url);
 		const html = await res.text();
 		const doc = new DOMParser().parseFromString(html, "text/html");
@@ -163,6 +164,8 @@ function overlayCustomGiftButton() {
 	//}
 
 	scanBtn.onclick = () => {
+		alert("Please use the toolbar plugin popup for scanning...");
+		return;
 		if (shouldRunOnFollowersPage) {
 		  const iframe = document.getElementById("my-extension-iframe");
 			if (iframe == null) {
@@ -426,14 +429,17 @@ async function scrapeFollowers() {
 	}
 	createOverlay();
 	updateOverlay("Fetching athlete IDs...");
+	sendToPopup("FROM_CONTENT", { message: "Fetching athlete IDs..." });
 
 	const athleteIds = await getAllAthleteIds();
 	updateOverlay(`Found ${athleteIds.length} athletes`);
-
+	sendToPopup("FROM_CONTENT", { message: `Found ${athleteIds.length} athletes` });
+	browser.runtime.sendMessage({ type: "cleanProfiles" }); // cleanup popup entries
 	const results = [];
 	for (const [i, id] of athleteIds.entries()) {
 		const url = `https://www.strava.com/athletes/${id}`;
 		updateOverlay(`Scraping ${i + 1}/${athleteIds.length}`);
+		sendToPopup("FROM_CONTENT", { message: `Scraping ${i + 1}/${athleteIds.length}` });
 		const { stats, fromCache } = await fetchProfileDetailsWithCache(url, id);
 		const { isSuspicious, reasons } = evaluateSuspiciousProfile(stats);
 		//console.log(isSuspicious, reasons, stats);
@@ -698,7 +704,7 @@ async function renderFollowerPageInIframe(urls) {
         </style>
       </head>
       <body>
-        <h4 style="margin: 0 0 12px 0;">🚨 Suspicious New Followers 🚨</h4>
+        <h3 style="margin: 0 0 12px 0;">🚨 Suspicious New Followers 🚨</h3>
   `);
 
   let suspiciousCount = 0;
@@ -722,9 +728,9 @@ async function renderFollowerPageInIframe(urls) {
 
 const profileHtml = `
   <div class="athlete" style="margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #ccc;">
-    <h2 style="margin: 4px 0; color: ${isSuspicious ? '#d00' : 'inherit'};">
+    <h3 style="margin: 4px 0; color: ${isSuspicious ? '#d00' : 'inherit'};">
       Name: ${stats.name} ${isSuspicious ? '<span style="font-size: 20px;">🚨🚴</span>' : ''}
-    </h2>
+    </h3>
 
     <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 8px;">
       <div class="cycling-avatar ${stats.isPremium ? 'premium' : 'standard'}" style="position: relative;">
@@ -918,12 +924,21 @@ closeBtn.addEventListener("click", () => {
   closeBtn.style.display = "none";
 });
 
-if (shouldRunOnFollowersPage()) {
+/*if (shouldRunOnFollowersPage()) {
 	iframeFollow.style.display = "none";
 	iframe.style.display = "block";
 	closeBtn.style.display = "block";
 	scrapeFollowers();
+}*/
+
+function sendToPopup(type, payload) {
+  window.postMessage({
+    type: type || "FROM_CONTENT",
+    payload: payload || {}
+  }, "*");
 }
+
+// Example usage:
 
 function waitForTriggerButton(retries = 20) {
   const trigger = document.querySelector("#newFollowersButton");

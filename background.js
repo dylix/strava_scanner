@@ -35,7 +35,7 @@ browser.runtime.onConnect.addListener((port) => {
 
 browser.runtime.onMessage.addListener((message) => {
 	if (message.action === "CLEAN_CACHE") {
-		profileCache = []
+		profileCache = [];
 		browser.tabs.query({ active: true, currentWindow: true }).then(tabs => {
 			browser.tabs.sendMessage(tabs[0].id, { action: "CLEAN_CACHE" });
 		});
@@ -52,6 +52,9 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
 	}
 	if (message.type === "getProfiles") {
 		return profileCache;
+	}
+	if (message.type === "cleanProfiles") {
+		profileCache = [];
 	}
 });
 
@@ -79,3 +82,15 @@ function notifyPopup() {
 		);
 	}
 }
+
+window.addEventListener("message", (event) => {
+  if (event.data?.type === "FROM_CONTENT") {
+    const iframe = document.getElementById("my-extension-iframe");
+    if (iframe && iframe.contentWindow) {
+      iframe.contentWindow.postMessage({
+        type: "TO_POPUP",
+        payload: event.data.payload
+      }, "*");
+    }
+  }
+});
