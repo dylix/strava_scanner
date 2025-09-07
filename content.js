@@ -67,48 +67,69 @@ function removeOverlay() {
 }
 
 async function getAllAthleteIds() {
-	const match = window.location.pathname.match(/athletes\/(\d+)/);
-	const athleteId = match ? match[1] : null;
-	if (!athleteId) {
-		console.warn("Could not extract athlete ID from URL");
-	return [];
-	}
+    const match = window.location.pathname.match(/athletes\/(\d+)/);
+    const athleteId = match ? match[1] : null;
+    if (!athleteId) {
+        console.warn("Could not extract athlete ID from URL");
+        return [];
+    }
 
-	const cacheKey = `dylixstrava_cachedFollowerIds_${athleteId}`;
-	const cached = JSON.parse(localStorage.getItem(cacheKey) || "[]");
-	if (cached.length > 0) {
-		showBadge("Using cached follower IDs");
-		return cached;
-	}
+    const cacheKey = `dylixstrava_cachedFollowerIds_${athleteId}`;
+    const cachedRaw = localStorage.getItem(cacheKey);
+    if (cachedRaw) {
+        try {
+            const { timestamp, ids } = JSON.parse(cachedRaw);
+            const TTL = 1000 * 60 * 60 * 24; // 24 hours
+            const ageMs = Date.now() - timestamp;
+            const ageHours = Math.floor(ageMs / 3600000);
 
-	let page = 1;
-	let allIds = new Set();
-	let emptyPages = 0;
-	const MAX_EMPTY_PAGES = 2;
+            if (ageMs < TTL && ids.length > 0) {
+                const freshness = ageHours < 6 ? "🚴‍♂️ Sprint-ready" :
+                    ageHours < 24 ? "🚴 Mid-ride legs" :
+                    "🛑 Bonked cache";
 
-	while (true) {
-		const url = `https://www.strava.com/athletes/${athleteId}/follows?page=${page}&page_uses_modern_javascript=true&type=followers`;
-		showBadge(`📖 Fetching athletes from page: ${page}`);
-		sendToPopup("FROM_CONTENT", { message: `📖 Fetching athletes from page: ${page}` });
-		const res = await fetch(url);
-		const html = await res.text();
-		const doc = new DOMParser().parseFromString(html, "text/html");
-		const ids = [...doc.querySelectorAll("li[data-athlete-id]")].map(li => li.getAttribute("data-athlete-id"));
-		if (ids.length === 0) {
-			emptyPages++;
-			if (emptyPages >= MAX_EMPTY_PAGES) break;
-		} else {
-			emptyPages = 0;
-			ids.forEach(id => allIds.add(id));
-		}
-		page++;
-		await sleep(1000); // polite delay
-	}
+                showBadge(`${freshness} — using ${ids.length} cached IDs`);
+                return ids;
+            } else {
+                showBadge(`🕒 Cache expired (${ageHours}h) — rehydrating`);
+            }
+        } catch (e) {
+            console.warn("Cache parse error:", e);
+        }
+    }
 
-	const finalIds = [...allIds];
-	localStorage.setItem(cacheKey, JSON.stringify(finalIds));
-	showBadge(`Cached ${finalIds.length} follower IDs`);
-	return finalIds;
+    let page = 1;
+    let allIds = new Set();
+    let emptyPages = 0;
+    const MAX_EMPTY_PAGES = 2;
+
+    while (true) {
+        const url = `https://www.strava.com/athletes/${athleteId}/follows?page=${page}&page_uses_modern_javascript=true&type=followers`;
+        showBadge(`📖 Fetching athletes from page: ${page}`);
+        sendToPopup("FROM_CONTENT", { message: `📖 Fetching athletes from page: ${page}` });
+        const res = await fetch(url);
+        const html = await res.text();
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        const ids = [...doc.querySelectorAll("li[data-athlete-id]")].map(li => li.getAttribute("data-athlete-id"));
+        if (ids.length === 0) {
+            emptyPages++;
+            if (emptyPages >= MAX_EMPTY_PAGES) break;
+        } else {
+            emptyPages = 0;
+            ids.forEach(id => allIds.add(id));
+        }
+        page++;
+        await sleep(1000); // polite delay
+    }
+
+    const finalIds = [...allIds];
+    const cachePayload = {
+        timestamp: Date.now(),
+        ids: finalIds
+    };
+    localStorage.setItem(cacheKey, JSON.stringify(cachePayload));
+    showBadge(`🚴 Cached ${finalIds.length} follower IDs — fresh legs loaded`);
+    return finalIds;
 }
 
 function overlayCustomGiftButton() {
@@ -418,41 +439,51 @@ function shouldRunOnFollowersPage() {
 }
 
 async function scrapeFollowers() {
-	
-	/*if (!window.location.href.includes("type=followers")) {
-		alert("Please navigate to your Followers page to run this extension.");
-		return;
-	}*/
-	if (!window.location.href.includes("type=followers")) {
-		window.location.href = `/athletes/${athleteId}/follows?type=followers`;
-		return;
-	}
-	createOverlay();
-	updateOverlay("Fetching athlete IDs...");
-	sendToPopup("FROM_CONTENT", { message: "Fetching athlete IDs..." });
+    if (!window.location.href.includes("type=followers")) {
+        localStorage.setItem("resumeScrapeFollowers", "true");
+        window.location.href = `/athletes/${athleteId}/follows?type=followers`;
+        return;
+    }
 
-	const athleteIds = await getAllAthleteIds();
-	updateOverlay(`Found ${athleteIds.length} athletes`);
-	sendToPopup("FROM_CONTENT", { message: `Found ${athleteIds.length} athletes` });
-	browser.runtime.sendMessage({ type: "cleanProfiles" }); // cleanup popup entries
-	const results = [];
-	for (const [i, id] of athleteIds.entries()) {
-		const url = `https://www.strava.com/athletes/${id}`;
-		updateOverlay(`Scraping ${i + 1}/${athleteIds.length}`);
-		sendToPopup("FROM_CONTENT", { message: `Scraping ${i + 1}/${athleteIds.length}` });
-		const { stats, fromCache } = await fetchProfileDetailsWithCache(url, id);
-		const { isSuspicious, reasons } = evaluateSuspiciousProfile(stats);
-		//console.log(isSuspicious, reasons, stats);
-		if (isSuspicious) {
-			sendProfileToBackground(stats, reasons);
-		}
-		results.push({ url, ...stats });
-		if (!fromCache) {
-			await sleep(500); // Only rate-limit if we hit the server
-		}
-	}
-	removeOverlay();
+    if (localStorage.getItem("resumeScrapeFollowers") === "true") {
+        localStorage.removeItem("resumeScrapeFollowers");
+        setTimeout(() => {
+            scrapeFollowersMain();
+        }, 1000);
+        return;
+    }
+
+    scrapeFollowersMain();
 }
+
+async function scrapeFollowersMain() {
+    createOverlay();
+    updateOverlay("Fetching athlete IDs...");
+    sendToPopup("FROM_CONTENT", { message: "Fetching athlete IDs..." });
+
+    const athleteIds = await getAllAthleteIds();
+    updateOverlay(`Found ${athleteIds.length} athletes`);
+    sendToPopup("FROM_CONTENT", { message: `Found ${athleteIds.length} athletes` });
+    browser.runtime.sendMessage({ type: "cleanProfiles" });
+
+    const results = [];
+    for (const [i, id] of athleteIds.entries()) {
+        const url = `https://www.strava.com/athletes/${id}`;
+        updateOverlay(`Scraping ${i + 1}/${athleteIds.length}`);
+        sendToPopup("FROM_CONTENT", { message: `Scraping ${i + 1}/${athleteIds.length}` });
+        const { stats, fromCache } = await fetchProfileDetailsWithCache(url, id);
+        const { isSuspicious, reasons } = evaluateSuspiciousProfile(stats);
+        if (isSuspicious) {
+            sendProfileToBackground(stats, reasons);
+        }
+        results.push({ url, ...stats });
+        if (!fromCache) {
+            await sleep(500);
+        }
+    }
+    removeOverlay();
+}
+
 
 function clickFinalBlockButton() {
 	const confirmBtn = document.querySelector("a.confirm-block");
@@ -531,7 +562,7 @@ function showSuspiciousProfileOverlay({ name, plocation, followers, following, r
 		</ul>
 		<div style="margin-top: 16px; text-align: right;">
 			<button id="blockBtn" style="margin-right: 10px; padding: 8px 16px; background: #d33; color: white; border: none; border-radius: 4px;">Block</button>
-			<button id="ignoreBtn" style="padding: 8px 16px; background: #ccc; border: none; border-radius: 4px;">Ignore</button>
+			<button id="ignoreBtn" style="padding: 8px 16px; background: #ccc; border: none; border-radius: 4px;">Close</button>
 		</div>
 
 	`;
@@ -611,10 +642,10 @@ function confirmAndBlockSuspiciousProfile() {
 };
 
 function openNotificationsPanel() {
-  const bellButton = document.querySelector('button[data-cy="notifications-bell"]');
-  if (bellButton && bellButton.getAttribute("aria-expanded") === "false") {
-    bellButton.click();
-  }
+	const bellButton = document.querySelector('button[data-cy="notifications-bell"]');
+	if (bellButton && bellButton.getAttribute("aria-expanded") === "false") {
+	bellButton.click();
+	}
 }
 
 function waitForNotificationsList(callback, maxWait = 8000, stableFor = 500) {
@@ -622,29 +653,29 @@ function waitForNotificationsList(callback, maxWait = 8000, stableFor = 500) {
   let lastCount = 0;
   let stableStart = null;
 
-  (function poll() {
-    const list = document.querySelector("#notifications-list");
-    const items = list?.querySelectorAll("li") ?? [];
+	(function poll() {
+	const list = document.querySelector("#notifications-list");
+	const items = list?.querySelectorAll("li") ?? [];
 
-    if (items.length > 0) {
-      if (items.length === lastCount) {
-        if (!stableStart) stableStart = Date.now();
-        if (Date.now() - stableStart >= stableFor) {
-          callback(items);
-          return;
-        }
-      } else {
-        lastCount = items.length;
-        stableStart = null;
-      }
-    }
+	if (items.length > 0) {
+		if (items.length === lastCount) {
+			if (!stableStart) stableStart = Date.now();
+			if (Date.now() - stableStart >= stableFor) {
+				callback(items);
+				return;
+			}
+		} else {
+			lastCount = items.length;
+			stableStart = null;
+	  }
+	}
 
-    if (Date.now() - start < maxWait) {
-      setTimeout(poll, 100);
-    } else {
-      alert("⚠️ Notifications list did not load in time.");
-    }
-  })();
+	if (Date.now() - start < maxWait) {
+		setTimeout(poll, 100);
+	} else {
+		alert("⚠️ Notifications list did not load in time.");
+	}
+	})();
 }
 
 function extractIdFromUrl(url) {
@@ -932,24 +963,104 @@ closeBtn.addEventListener("click", () => {
 }*/
 
 function sendToPopup(type, payload) {
-  window.postMessage({
+  browser.runtime.sendMessage({
     type: type || "FROM_CONTENT",
-    payload: payload || {}
-  }, "*");
+    ...payload
+  });
 }
+const cyclistImgUrl = browser.runtime.getURL("icons/cyclist.png");
+browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+	if (message.action === "showCyclistConfirm") {
+		const overlay = document.createElement("div");
+		overlay.id = "cyclist-confirm-overlay";
+		overlay.innerHTML = `
+			<style>
+				#cyclist-confirm-overlay {
+					position: fixed;
+					top: 0; left: 0;
+					width: 100%; height: 100%;
+					background: rgba(0,0,0,0.6);
+					z-index: 9999;
+					display: flex;
+					align-items: center;
+					justify-content: center;
+					font-family: sans-serif;
+				}
+				#cyclist-confirm-box {
+					background: white;
+					border-radius: 12px;
+					padding: 24px;
+					text-align: center;
+					box-shadow: 0 0 20px rgba(0,0,0,0.3);
+					max-width: 400px;
+				}
+				#cyclist-confirm-box img {
+					width: 120px;
+					margin-bottom: 16px;
+				}
+				#cyclist-confirm-box h2 {
+					margin: 0 0 12px;
+					font-size: 20px;
+				}
+				#cyclist-confirm-box p {
+					margin: 0 0 20px;
+					font-size: 16px;
+				}
+				#cyclist-confirm-box button {
+					margin: 0 10px;
+					padding: 10px 20px;
+					font-size: 14px;
+					border: none;
+					border-radius: 6px;
+					cursor: pointer;
+				}
+				#cyclist-confirm-yes {
+					background: #28a745;
+					color: white;
+				}
+				#cyclist-confirm-no {
+					background: #dc3545;
+					color: white;
+				}
+			</style>
+			<div id="cyclist-confirm-box">
+				<img src="${cyclistImgUrl}" alt="Cyclist">
 
-// Example usage:
+				<h2>Ready to ride?</h2>
+				<p>You're about to open ${message.count} tabs. Want to roll?</p>
+				<button id="cyclist-confirm-yes">Yes, ride!</button>
+				<button id="cyclist-confirm-no">Nope</button>
+			</div>
+		`;
+
+		document.body.appendChild(overlay);
+
+		const cleanup = () => overlay.remove();
+
+		document.getElementById("cyclist-confirm-yes").onclick = () => {
+			sendResponse({ confirmed: true });
+			cleanup();
+		};
+		document.getElementById("cyclist-confirm-no").onclick = () => {
+			sendResponse({ confirmed: false });
+			cleanup();
+		};
+
+		// Required to keep sendResponse alive
+		return true;
+	}
+});
 
 function waitForTriggerButton(retries = 20) {
-  const trigger = document.querySelector("#newFollowersButton");
-  if (trigger) {
-    trigger.addEventListener("click", openAllNewFollowerProfiles);
-    //console.log("✅ Bound click handler to trigger button.");
-  } else if (retries > 0) {
-    setTimeout(() => waitForTriggerButton(retries - 1), 250);
-  } else {
-    console.warn("❌ Trigger button not found after retries.");
-  }
+	const trigger = document.querySelector("#newFollowersButton");
+	if (trigger) {
+		trigger.addEventListener("click", openAllNewFollowerProfiles);
+		//console.log("✅ Bound click handler to trigger button.");
+	} else if (retries > 0) {
+		setTimeout(() => waitForTriggerButton(retries - 1), 250);
+	} else {
+		console.warn("❌ Trigger button not found after retries.");
+	}
 }
 
 waitForTriggerButton();

@@ -122,3 +122,9 @@ window.addEventListener("message", (event) => {
     document.getElementById("status").textContent = msg;
   }
 });
+
+browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.type === "FROM_CONTENT") {
+	document.getElementById("status").textContent = msg.message;
+  }
+});

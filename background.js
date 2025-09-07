@@ -60,12 +60,27 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
 
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 	if (message.action === "openProfiles" && Array.isArray(message.urls)) {
-		const MAX_TABS = 10;
-		message.urls.slice(0, MAX_TABS).forEach(url => {
-			browser.tabs.create({ url });
-		});
+		const openTabs = () => {
+			message.urls.forEach(url => browser.tabs.create({ url }));
+		};
+
+		if (message.urls.length > 10) {
+			browser.tabs.query({ active: true, currentWindow: true }).then(tabs => {
+				if (tabs[0]) {
+					browser.tabs.sendMessage(tabs[0].id, {
+						action: "showCyclistConfirm",
+						count: message.urls.length
+					}).then(response => {
+						if (response?.confirmed) openTabs();
+					});
+				}
+			});
+		} else {
+			openTabs();
+		}
 	}
 });
+
 
 function notifyPopup() {
 	// Notify the popup (extension context)
@@ -84,13 +99,13 @@ function notifyPopup() {
 }
 
 window.addEventListener("message", (event) => {
-  if (event.data?.type === "FROM_CONTENT") {
-    const iframe = document.getElementById("my-extension-iframe");
-    if (iframe && iframe.contentWindow) {
-      iframe.contentWindow.postMessage({
-        type: "TO_POPUP",
-        payload: event.data.payload
-      }, "*");
-    }
-  }
+	if (event.data?.type === "FROM_CONTENT") {
+		const iframe = document.getElementById("my-extension-iframe");
+		if (iframe && iframe.contentWindow) {
+		  iframe.contentWindow.postMessage({
+			type: "TO_POPUP",
+			payload: event.data.payload
+		  }, "*");
+		}
+	}
 });
